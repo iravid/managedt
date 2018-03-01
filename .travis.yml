@@ -1,0 +1,17 @@
+sudo: false
+language: scala
+jdk:
+- oraclejdk8
+scala:
+- 2.11.12
+- 2.12.4
+cache:
+  directories:
+  - $HOME/.ivy2/cache
+  - $HOME/.sbt/boot/
+  - $TRAVIS_BUILD_DIR/target
+  - $TRAVIS_BUILD_DIR/project/target
+script:
+- sbt ++$TRAVIS_SCALA_VERSION ";test;tut"
+- find $HOME/.sbt -name "*.lock" -exec rm {} \;
+- find $HOME/.ivy2 -name "ivydata-*.properties" -exec rm {} \;
