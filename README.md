@@ -23,13 +23,16 @@ However, it is very likely to be broken if:
 - you use cancellation with `Task` or `IO` - `MonadError` is not strong enough to express
   bracketing with cancellation, so that'll have to wait for `MonadBracket` in
   `cats-effect`;
+- you use it with a monad transformer such as `EitherT[IO, E, A]`, where there
+  are several "layers" in which errors could be thrown;
 - you throw exceptions in the acquire or cleanup actions that are not sequenced
   into the `F[_]`;
 - you pass `Future` values that have already been executed in the acquire or
   cleanup functions. The library has constructors with by-name values in most
   places to assist with that.
 
-The test suite exercises the common usecases; you are welcome to have a look.
+Other than that, it's all good ;-) The test suite exercises the common usecases;
+you are welcome to have a look.
 
 ## Usage
 
@@ -52,10 +55,10 @@ import monix.eval.Task
 // import monix.eval.Task
 
 val resource1 = ManagedT(Task { println("Acquiring 1"); 1 })(r => Task(println(s"Cleaning $r")))
-// resource1: com.iravid.managedt.ManagedT[monix.eval.Task,Int] = com.iravid.managedt.ManagedT$$anon$4@7a33d7a
+// resource1: com.iravid.managedt.ManagedT[monix.eval.Task,Int] = com.iravid.managedt.ManagedT$$anon$4@23497a65
 
 val resource2 = ManagedT(Task { println("Acquiring 2"); 2 })(r => Task(println(s"Cleaning $r")))
-// resource2: com.iravid.managedt.ManagedT[monix.eval.Task,Int] = com.iravid.managedt.ManagedT$$anon$4@6615cfaa
+// resource2: com.iravid.managedt.ManagedT[monix.eval.Task,Int] = com.iravid.managedt.ManagedT$$anon$4@42716335
 ```
 
 Compose them - `ManagedT[F, R]` is a monad in `R`, so you can use the usual forms of composition:
@@ -64,18 +67,18 @@ import cats.implicits._
 // import cats.implicits._
 
 val zipped = (resource1, resource2).tupled
-// zipped: com.iravid.managedt.ManagedT[monix.eval.Task,(Int, Int)] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@640dc942
+// zipped: com.iravid.managedt.ManagedT[monix.eval.Task,(Int, Int)] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@6d555633
 
 val added = for {
   r1 <- resource1
   r2 <- resource2
 } yield r1 + r2
-// added: com.iravid.managedt.ManagedT[monix.eval.Task,Int] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@9c99dfa
+// added: com.iravid.managedt.ManagedT[monix.eval.Task,Int] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@228720d0
 
 val resources = (1 to 10).toList traverse { r =>
   ManagedT(Task { println(s"Acquiring $r"); r})(r => Task(println(s"Cleaning $r")))
 }
-// resources: com.iravid.managedt.ManagedT[monix.eval.Task,List[Int]] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@127a5af
+// resources: com.iravid.managedt.ManagedT[monix.eval.Task,List[Int]] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@346d3ee3
 ```
 
 And, finally, use your acquired resource in a function of the form `R => F[A]`:
@@ -85,14 +88,14 @@ val zippedUsage = zipped { case (r1, r2) =>
     println("Using zipped"); r1 + r2 
   }
 }
-// zippedUsage: monix.eval.Task[Int] = Task.FlatMap$1674067291
+// zippedUsage: monix.eval.Task[Int] = Task.FlatMap$1596984844
 
 val addedUsage = added { r => 
   Task {
     println("Using added"); r * r 
   }
 }
-// addedUsage: monix.eval.Task[Int] = Task.FlatMap$2021842220
+// addedUsage: monix.eval.Task[Int] = Task.FlatMap$757626346
 
 val resourcesUsage = resources { rs => 
   Task {
@@ -100,7 +103,7 @@ val resourcesUsage = resources { rs =>
     rs.sum 
   }
 }
-// resourcesUsage: monix.eval.Task[Int] = Task.FlatMap$1327562396
+// resourcesUsage: monix.eval.Task[Int] = Task.FlatMap$1046714810
 ```
 
 As we're using `Task`, nothing has actually run yet; we've composed programs that use the resources safely. Let's see what happens when we run them:
@@ -160,7 +163,7 @@ val acquireFailure = for {
   _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 2")})
   _ <- ManagedT(Task.raiseError(new Exception))((_: Unit) => Task { println("Cleaning 3") })
 } yield ()
-// acquireFailure: com.iravid.managedt.ManagedT[monix.eval.Task,Unit] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@31bb2b58
+// acquireFailure: com.iravid.managedt.ManagedT[monix.eval.Task,Unit] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@de37d32
 
 Await.result(acquireFailure(_ => Task.unit).attempt.runAsync, 5.seconds)
 // Cleaning 2
@@ -172,7 +175,7 @@ val useFailure = for {
   _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 2")})
   _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 3") })
 } yield ()
-// useFailure: com.iravid.managedt.ManagedT[monix.eval.Task,Unit] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@2dcc81a1
+// useFailure: com.iravid.managedt.ManagedT[monix.eval.Task,Unit] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@6c1de753
 
 Await.result(useFailure(_ => Task.raiseError(new Exception())).attempt.runAsync, 5.seconds)
 // Cleaning 3
@@ -185,7 +188,7 @@ val cleanupFailure = for {
   _ <- ManagedT(Task.unit)(_ => Task.raiseError(new Exception()))
   _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 3") })
 } yield ()
-// cleanupFailure: com.iravid.managedt.ManagedT[monix.eval.Task,Unit] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@53e218e1
+// cleanupFailure: com.iravid.managedt.ManagedT[monix.eval.Task,Unit] = com.iravid.managedt.ManagedT$$anon$1$$anon$5@1417b95d
 
 Await.result(cleanupFailure(_ => Task.unit).attempt.runAsync, 5.seconds)
 // Cleaning 3

@@ -23,13 +23,16 @@ However, it is very likely to be broken if:
 - you use cancellation with `Task` or `IO` - `MonadError` is not strong enough to express
   bracketing with cancellation, so that'll have to wait for `MonadBracket` in
   `cats-effect`;
+- you use it with a monad transformer such as `EitherT[IO, E, A]`, where there
+  are several "layers" in which errors could be thrown;
 - you throw exceptions in the acquire or cleanup actions that are not sequenced
   into the `F[_]`;
 - you pass `Future` values that have already been executed in the acquire or
   cleanup functions. The library has constructors with by-name values in most
   places to assist with that.
 
-The test suite exercises the common usecases; you are welcome to have a look.
+Other than that, it's all good ;-) The test suite exercises the common usecases;
+you are welcome to have a look.
 
 ## Usage
 
