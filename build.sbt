@@ -71,6 +71,8 @@ def options(version: String) =
       )
   }
 
+import com.typesafe.sbt.pgp.PgpKeys
+
 inThisBuild(
   List(
     organization := "com.iravid",
@@ -95,13 +97,14 @@ inThisBuild(
         url   = url("https://github.com/iravid")
       )
     ),
-    bintrayReleaseOnPublish in ThisBuild := false,
-    bintrayPackageLabels := Seq("cats", "resource", "managed", "monad")
+    publishMavenStyle := true,
+    publishTo := (sonatypePublishTo in root).value
   ))
 
 lazy val root = (project in file("."))
   .settings(
-    publish := {}
+    publish := {},
+    PgpKeys.publishSigned := {}
   )
   .aggregate(core, tut)
 
@@ -123,6 +126,7 @@ lazy val tut = (project in file("tut"))
     name := "tut",
     scalacOptions := options(scalaVersion.value),
     publish := {},
+    PgpKeys.publishSigned := {},
     libraryDependencies ++= Seq(
       "io.monix" %% "monix-eval" % "3.0.0-M3"
     ),
