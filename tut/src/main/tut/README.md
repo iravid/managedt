@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.org/iravid/managedt.svg?branch=master)](https://travis-ci.org/iravid/managedt)
-[![Download](https://api.bintray.com/packages/iravid/maven/managedt/images/download.svg) ](https://bintray.com/iravid/maven/managedt/_latestVersion)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.iravid/managedt_2.12/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.iravid/managedt_2.12)
 
 # ManagedT: a monad for resource management
 
@@ -39,7 +39,6 @@ you are welcome to have a look.
 ### SBT
 
 ```scala
-resolvers += Resolver.jcenterRepo
 libraryDependencies += ״com.iravid" %% "managedt" % "0.1"
 ```
 
