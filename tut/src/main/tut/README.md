@@ -48,10 +48,10 @@ First, create some resources:
 
 ```tut:book
 import com.iravid.managedt.ManagedT
-import monix.eval.Task
+import cats.effect.IO
 
-val resource1 = ManagedT(Task { println("Acquiring 1"); 1 })(r => Task(println(s"Cleaning $r")))
-val resource2 = ManagedT(Task { println("Acquiring 2"); 2 })(r => Task(println(s"Cleaning $r")))
+val resource1 = ManagedT(IO { println("Acquiring 1"); 1 })(r => IO(println(s"Cleaning $r")))
+val resource2 = ManagedT(IO { println("Acquiring 2"); 2 })(r => IO(println(s"Cleaning $r")))
 ```
 
 Compose them - `ManagedT[F, R]` is a monad in `R`, so you can use the usual forms of composition:
@@ -65,74 +65,66 @@ val added = for {
 } yield r1 + r2
 
 val resources = (1 to 10).toList traverse { r =>
-  ManagedT(Task { println(s"Acquiring $r"); r})(r => Task(println(s"Cleaning $r")))
+  ManagedT(IO { println(s"Acquiring $r"); r})(r => IO(println(s"Cleaning $r")))
 }
 ```
 
 And, finally, use your acquired resource in a function of the form `R => F[A]`:
 ```tut:book
 val zippedUsage = zipped { case (r1, r2) => 
-  Task {
+  IO {
     println("Using zipped"); r1 + r2 
   }
 }
 
 val addedUsage = added { r => 
-  Task {
+  IO {
     println("Using added"); r * r 
   }
 }
 
 val resourcesUsage = resources { rs => 
-  Task {
+  IO {
     println("Using resources")
     rs.sum 
   }
 }
 ```
 
-As we're using `Task`, nothing has actually run yet; we've composed programs that use the resources safely. Let's see what happens when we run them:
-
-```tut:silent
-import monix.execution.Scheduler
-implicit val scheduler = Scheduler.singleThread(name="tut")
-```
+As we're using `IO`, nothing has actually run yet; we've composed programs that use the resources safely. Let's see what happens when we run them:
 
 ```tut:book
-import scala.concurrent.Await
-import scala.concurrent.duration._
-
-Await.result(zippedUsage.runAsync, 5.seconds)
+zippedUsage.unsafeRunSync
 ```
 
 The program constructed by `ManagedT[F, A]` properly acquires and releases resources in the right order. This also works for the traversed list of resources:
 ```tut:book
-Await.result(resourcesUsage.runAsync, 5.seconds)
+resourcesUsage.unsafeRunSync
 ```
 
 Should one of the acquires, clean-ups or uses fail, the clean-ups will still run properly:
 ```tut:book
 val acquireFailure = for {
-  _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 1") })
-  _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 2")})
-  _ <- ManagedT(Task.raiseError(new Exception))((_: Unit) => Task { println("Cleaning 3") })
+  _ <- ManagedT(IO.unit)(_ => IO { println("Cleaning 1") })
+  _ <- ManagedT(IO.unit)(_ => IO { println("Cleaning 2")})
+  _ <- ManagedT(IO.raiseError(new Exception))((_: Unit) => IO { println("Cleaning 3") })
 } yield ()
 
-Await.result(acquireFailure(_ => Task.unit).attempt.runAsync, 5.seconds)
+acquireFailure(_ => IO.unit).attempt.unsafeRunSync
 
 val useFailure = for {
-  _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 1") })
-  _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 2")})
-  _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 3") })
+  _ <- ManagedT(IO.unit)(_ => IO { println("Cleaning 1") })
+  _ <- ManagedT(IO.unit)(_ => IO { println("Cleaning 2")})
+  _ <- ManagedT(IO.unit)(_ => IO { println("Cleaning 3") })
 } yield ()
 
-Await.result(useFailure(_ => Task.raiseError(new Exception())).attempt.runAsync, 5.seconds)
+useFailure(_ => IO.raiseError(new Exception())).attempt.unsafeRunSync
 
 val cleanupFailure = for {
-  _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 1") })
-  _ <- ManagedT(Task.unit)(_ => Task.raiseError(new Exception()))
-  _ <- ManagedT(Task.unit)(_ => Task { println("Cleaning 3") })
+  _ <- ManagedT(IO.unit)(_ => IO { println("Cleaning 1") })
+  _ <- ManagedT(IO.unit)(_ => IO.raiseError(new Exception()))
+  _ <- ManagedT(IO.unit)(_ => IO { println("Cleaning 3") })
 } yield ()
 
-Await.result(cleanupFailure(_ => Task.unit).attempt.runAsync, 5.seconds)
+cleanupFailure(_ => IO.unit).attempt.unsafeRunSync
 ```
