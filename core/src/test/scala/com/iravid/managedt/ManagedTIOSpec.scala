@@ -1,8 +1,7 @@
 package com.iravid.managedt
 
+import cats.effect.IO
 import cats.kernel.Eq
-import monix.execution.Scheduler
-import monix.eval.Task
 import org.scalacheck.Arbitrary
 import org.scalatest.{ FunSuite, Matchers }
 import org.scalatest.concurrent.ScalaFutures
@@ -11,25 +10,24 @@ import org.typelevel.discipline.scalatest.Discipline
 import cats.kernel.laws.discipline.MonoidTests
 import cats.laws.discipline._
 import cats.implicits._
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
-class ManagedTSpec
+class ManagedTIOSpec
     extends FunSuite with Discipline with GeneratorDrivenPropertyChecks with ScalaFutures
     with Matchers {
-  import ManagedTSpec._
-  import monix.execution.Scheduler.Implicits.global
+  import ManagedTIOSpec._
+
+  Thread.setDefaultUncaughtExceptionHandler((t, e) => ())
 
   test("ManagedT invokes cleanups in reverse order of acquiry") {
     forAll { resources: List[String] =>
       var cleanups: List[String] = Nil
 
       val managed =
-        resources.traverse(r => ManagedT(Task(r))(r => Task { cleanups = r :: cleanups }))
+        resources.traverse(r => ManagedT(IO(r))(r => IO { cleanups = r :: cleanups }))
 
       val task = managed.unwrap
 
-      val res2 = task.runAsync.futureValue
+      val res2 = task.unsafeRunSync
 
       res2 shouldBe resources
       cleanups shouldBe resources
@@ -42,37 +40,37 @@ class ManagedTSpec
 
       val managed = resources traverse {
         case (resource, shouldFail) =>
-          ManagedT(Task(resource)) { r =>
+          ManagedT(IO(resource)) { r =>
             cleanups = r :: cleanups
 
-            if (shouldFail) Task.raiseError(new Exception())
-            else Task.unit
+            if (shouldFail) IO.raiseError(new Exception())
+            else IO.unit
           }
       }
 
       val task = managed.unwrap
 
-      task.attempt.runAsync.futureValue
+      task.attempt.unsafeRunSync
 
       cleanups shouldBe resources.unzip._1
     }
   }
 
-  checkAll("Monad", MonadTests[ManagedT[Task, ?]].monad[String, String, String])
-  checkAll("Monoid", MonoidTests[ManagedT[Task, String]].monoid)
+  checkAll("Monad", MonadTests[ManagedT[IO, ?]].monad[String, String, String])
+  checkAll("Monoid", MonoidTests[ManagedT[IO, String]].monoid)
 }
 
-object ManagedTSpec {
-  implicit def taskEq[A: Eq](implicit S: Scheduler): Eq[Task[A]] = Eq.instance { (a, b) =>
-    Await.result(a.runAsync, 30.seconds) === Await.result(b.runAsync, 30.seconds)
+object ManagedTIOSpec {
+  implicit def ioEq[A: Eq]: Eq[IO[A]] = Eq.instance { (a, b) =>
+    a.unsafeRunSync === b.unsafeRunSync
   }
 
-  implicit def managedEq[R: Eq](implicit S: Scheduler): Eq[ManagedT[Task, R]] = Eq.by(_.unwrap)
+  implicit def managedEq[R: Eq]: Eq[ManagedT[IO, R]] = Eq.by(_.unwrap)
 
-  implicit def managedArbitrary[R: Arbitrary]: Arbitrary[ManagedT[Task, R]] =
+  implicit def managedArbitrary[R: Arbitrary]: Arbitrary[ManagedT[IO, R]] =
     Arbitrary {
       Arbitrary.arbitrary[R].map { r =>
-        ManagedT(Task(r))(_ => Task.unit)
+        ManagedT(IO(r))(_ => IO.unit)
       }
     }
 }
