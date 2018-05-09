@@ -20,7 +20,7 @@ def options(version: String) =
         "-Xfuture",
         "-Ywarn-unused-import" // 2.11 only
       )
-    case "2.12.4" =>
+    case "2.12.6" =>
       Seq(
         "-deprecation", // Emit warning and location for usages of deprecated APIs.
         "-encoding",
@@ -76,8 +76,8 @@ import com.typesafe.sbt.pgp.PgpKeys
 inThisBuild(
   List(
     organization := "com.iravid",
-    scalaVersion := "2.12.4",
-    crossScalaVersions := Seq("2.11.12", "2.12.4"),
+    scalaVersion := "2.12.6",
+    crossScalaVersions := Seq("2.11.12", "2.12.6"),
     version := "0.1",
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     scalafmtOnCompile := true,
