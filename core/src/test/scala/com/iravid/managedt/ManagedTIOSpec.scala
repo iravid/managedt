@@ -16,7 +16,11 @@ class ManagedTIOSpec
     with Matchers {
   import ManagedTIOSpec._
 
-  Thread.setDefaultUncaughtExceptionHandler((t, e) => ())
+  // used to mute stack traces from exceptions thrown
+  // single abstract method syntax only supported in 2.12 (or 2.11 with experimental)
+  Thread.setDefaultUncaughtExceptionHandler(new java.lang.Thread.UncaughtExceptionHandler {
+    def uncaughtException(t: Thread, e: Throwable): Unit = ()
+  })
 
   test("ManagedT invokes cleanups in reverse order of acquiry") {
     forAll { resources: List[String] =>
