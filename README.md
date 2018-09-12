@@ -1,3 +1,7 @@
+# Deprecated
+
+With cats-effect 1.0.0 out, this library is now redundant. The [`Resource`](https://typelevel.org/cats-effect/datatypes/resource.html) data type provides equivalent functionality.
+
 [![Build Status](https://travis-ci.org/iravid/managedt.svg?branch=master)](https://travis-ci.org/iravid/managedt)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.iravid/managedt_2.12/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.iravid/managedt_2.12)
 
