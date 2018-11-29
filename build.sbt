@@ -113,11 +113,12 @@ lazy val core = (project in file("core"))
     name := "managedt",
     scalacOptions := options(scalaVersion.value),
     libraryDependencies ++= Seq(
-      "org.typelevel"  %% "cats-core"  % "1.0.1",
-      "org.scalatest"  %% "scalatest"  % "3.0.4" % "test",
-      "org.scalacheck" %% "scalacheck" % "1.13.4" % "test",
-      "org.typelevel"  %% "cats-laws"  % "1.0.1" % "test",
-      "io.monix"       %% "monix-eval" % "3.0.0-M3" % "test"
+      "org.typelevel"  %% "cats-core"   % "1.1.0",
+      "org.typelevel"  %% "cats-effect" % "1.0.0-RC",
+      "org.scalatest"  %% "scalatest"   % "3.0.4" % "test",
+      "org.scalacheck" %% "scalacheck"  % "1.13.4" % "test",
+      "org.typelevel"  %% "cats-laws"   % "1.0.1" % "test",
+      "io.monix"       %% "monix-eval"  % "3.0.0-RC1" % "test"
     )
   )
 
@@ -128,7 +129,7 @@ lazy val tut = (project in file("tut"))
     publish := {},
     PgpKeys.publishSigned := {},
     libraryDependencies ++= Seq(
-      "io.monix" %% "monix-eval" % "3.0.0-M3"
+      "io.monix" %% "monix-eval" % "3.0.0-RC1"
     ),
     scalacOptions := {
       scalacOptions.value.filterNot(_ startsWith "-Ywarn-unused")

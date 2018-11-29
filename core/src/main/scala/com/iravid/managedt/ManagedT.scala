@@ -1,8 +1,8 @@
 package com.iravid.managedt
 
 import cats.kernel.{ Monoid, Semigroup }
-import cats.{ Applicative, Monad, MonadError, StackSafeMonad }
-import cats.implicits._
+import cats.{ Applicative, Monad, StackSafeMonad }
+import cats.effect.Bracket
 
 abstract class ManagedT[F[_], R] {
 
@@ -28,42 +28,34 @@ object ManagedT extends ManagedTLowPriority {
     * Construct a new ManagedT that acquires a resource using `acquire` and releases it
     * with `cleanup` after it is used.
     */
-  def apply[F[_], R](acquire: => F[R])(cleanup: R => F[Unit])(
-    implicit FE: MonadError[F, Throwable]): ManagedT[F, R] =
+  def apply[F[_], R, E](acquire: => F[R])(cleanup: R => F[Unit])(
+    implicit B: Bracket[F, E]): ManagedT[F, R] =
     new ManagedT[F, R] {
-      def apply[A](use: R => F[A]): F[A] =
-        for {
-          resource      <- acquire
-          resultOrError <- use(resource).attempt
-          result <- resultOrError match {
-                     case Left(e)  => cleanup(resource) *> e.raiseError[F, A]
-                     case Right(a) => cleanup(resource) as a
-                   }
-        } yield result
+      def apply[A](use: R => F[A]): F[A] = B.bracket(acquire)(use)(cleanup)
     }
 
   /**
     * Lifts a value in `F` into `ManagedT[F, A]` *with no cleanup handler*. Use with
     * caution!
     */
-  def liftF[F[_], A](fa: => F[A])(implicit FE: MonadError[F, Throwable]): ManagedT[F, A] =
-    ManagedT(fa)(_ => FE.unit)
+  def liftF[F[_], A, E](fa: => F[A])(implicit B: Bracket[F, E]): ManagedT[F, A] =
+    ManagedT(fa)(_ => B.unit)
 
   /**
     * Lifts a value into `ManagedT[F, A]` *with no cleanup handler*. Use with
     * caution!
     */
-  def pure[F[_]: MonadError[?[_], Throwable]] = new PartiallyAppliedBuilder[F]
-  class PartiallyAppliedBuilder[F[_]](implicit FE: MonadError[F, Throwable]) {
-    def apply[A](a: => A): ManagedT[F, A] = liftF(FE.pure(a))
+  def pure[F[_]: Bracket[?[_], E], E] = new PartiallyAppliedBuilder[F, E]
+  class PartiallyAppliedBuilder[F[_], E](implicit B: Bracket[F, E]) {
+    def apply[A](a: => A): ManagedT[F, A] = liftF(B.pure(a))
   }
 
-  implicit def monad[F[_]](
+  implicit def monad[F[_], E](
     implicit
-    FE: MonadError[F, Throwable]): Monad[ManagedT[F, ?]] =
+    B: Bracket[F, E]): Monad[ManagedT[F, ?]] =
     new Monad[ManagedT[F, ?]] with StackSafeMonad[ManagedT[F, ?]] {
       def pure[A](x: A): ManagedT[F, A] =
-        apply(x.pure[F])(_ => FE.unit)
+        apply(B.pure(x))(_ => B.unit)
 
       def flatMap[R1, R2](fa: ManagedT[F, R1])(f: R1 => ManagedT[F, R2]): ManagedT[F, R2] =
         new ManagedT[F, R2] {
@@ -85,21 +77,20 @@ object ManagedT extends ManagedTLowPriority {
         }
     }
 
-  implicit def monoid[F[_], A](implicit A: Monoid[A],
-                               FE: MonadError[F, Throwable]): Monoid[ManagedT[F, A]] =
+  implicit def monoid[F[_], A, E](implicit A: Monoid[A], B: Bracket[F, E]): Monoid[ManagedT[F, A]] =
     new Monoid[ManagedT[F, A]] {
       def combine(x: ManagedT[F, A], y: ManagedT[F, A]): ManagedT[F, A] =
-        monad[F].map2(x, y)(A.combine)
+        monad[F, E].map2(x, y)(A.combine)
 
-      def empty: ManagedT[F, A] = monad[F].pure(A.empty)
+      def empty: ManagedT[F, A] = monad[F, E].pure(A.empty)
     }
 }
 
 trait ManagedTLowPriority {
-  implicit def semigroup[F[_], A](implicit FE: MonadError[F, Throwable],
-                                  A: Semigroup[A]): Semigroup[ManagedT[F, A]] =
+  implicit def semigroup[F[_], A, E](implicit B: Bracket[F, E],
+                                     A: Semigroup[A]): Semigroup[ManagedT[F, A]] =
     new Semigroup[ManagedT[F, A]] {
       def combine(x: ManagedT[F, A], y: ManagedT[F, A]): ManagedT[F, A] =
-        ManagedT.monad[F].map2(x, y)(A.combine)
+        ManagedT.monad[F, E].map2(x, y)(A.combine)
     }
 }
